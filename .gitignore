@@ -1,0 +1,21 @@
+# Node.js
+mini-app/node_modules/
+mini-app/package-lock.json
+mini-app/npm-debug.log*
+
+# Build output
+mini-app/build/
+mini-app/dist/
+*.zip
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
