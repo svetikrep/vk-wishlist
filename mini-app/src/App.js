@@ -23,7 +23,7 @@ const STORAGE_KEY = 'wishlist_links';
 bridge.send('VKWebAppInit');
 
 function App() {
-  const insets = useInsets(); // получаем safe area insets
+  const insets = useInsets();
 
   const [fetchedUser, setUser] = useState();
   const [popout, setPopout] = useState(<ScreenSpinner />);
@@ -92,17 +92,25 @@ function App() {
     </Div>
   );
 
-  // Отступы из инсетов (если undefined, то 0)
   const topInset = insets?.top ?? 0;
   const bottomInset = insets?.bottom ?? 0;
 
   return (
     <SplitLayout style={{ height: '100vh' }}>
       <SplitCol style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <View activePanel="main">
-          <Panel id="main">
-            {/* Тонкая верхняя шапка с названием */}
-            <PanelHeader delimiter="none">Wishlist</PanelHeader>
+        <View activePanel="main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <Panel id="main" style={{ border: 'none', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <PanelHeader 
+              delimiter="none" 
+              style={{ 
+                boxShadow: 'none', 
+                border: 'none', 
+                background: 'transparent',
+                margin: 0,
+                padding: 0
+              }}
+            >
+              iWish</PanelHeader>
 
             {/* Кастомный блок с аватаркой и иконками */}
             <Div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
@@ -118,9 +126,7 @@ function App() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                {/* Сначала иконка поделиться */}
                 <Icon28ShareOutline onClick={shareWishlist} style={{ cursor: 'pointer' }} />
-                {/* Затем круглая кнопка добавления */}
                 <div
                   onClick={handleAddClick}
                   style={{
@@ -142,7 +148,7 @@ function App() {
 
             <Separator style={{ margin: 0 }} />
 
-            {/* Основной контент */}
+            {/* Контент с прокруткой */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {activeView === 'main' ? (
                 <WishlistGallery
@@ -156,7 +162,7 @@ function App() {
               )}
             </div>
 
-            {/* Нижняя панель с кнопками навигации */}
+            {/* Нижняя панель */}
             <div
               style={{
                 background: 'var(--vkui--color_background_content)',

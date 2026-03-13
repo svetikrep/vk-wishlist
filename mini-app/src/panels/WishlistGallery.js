@@ -11,13 +11,14 @@ import {
   Text,
   IconButton,
   Spinner,
+  Tappable,
 } from '@vkontakte/vkui';
 import { Icon28DeleteOutline, Icon28PictureOutline } from '@vkontakte/icons';
 
-// ---------- Кеш изображений ----------
+// Кеш изображений
 const imageCache = {};
 
-// ---------- Класс для формирования URL изображения Wildberries ----------
+// Класс для формирования URL картинки с Wildberries по ссылке
 class GenerateImgUrl {
   constructor(nmId, photoSize = "big", photoNumber = 1, format = "webp") {
     if (typeof nmId !== "number" || nmId < 0) {
@@ -64,133 +65,96 @@ class GenerateImgUrl {
     if (vol <= 14000) return "32";
     return "33";
   }
-
-  url() {
-    const vol = Math.floor(this.nmId / 100000);
-    const part = Math.floor(this.nmId / 1000);
-    const basket = this.id(vol);
-    return `https://basket-${basket}.wbbasket.ru/vol${vol}/part${part}/${this.nmId}/images/${this.size}/${this.number}.${this.format}`;
-  }
 }
 
-// ---------- Вспомогательные функции ----------
-const checkImageUrl = (url, timeout = 3000) => {
-  return Promise.race([
-    new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = url;
-    }),
-    new Promise((resolve) => setTimeout(() => resolve(false), timeout))
-  ]);
+//
+const checkDirectImageUrl = (url, timeout = 1500) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => reject(new Error('not found'));
+    img.src = url;
+    setTimeout(() => reject(new Error('timeout')), timeout);
+  });
 };
 
 const getWildberriesImageUrl = async (article) => {
   const cacheKey = `wb_${article}`;
   if (imageCache[cacheKey]) return imageCache[cacheKey];
 
-  const stored = localStorage.getItem(cacheKey);
-  if (stored) {
-    const cached = JSON.parse(stored);
-    imageCache[cacheKey] = cached.url;
-    return cached.url;
-  }
-
   const nmId = parseInt(article, 10);
   const vol = Math.floor(nmId / 100000);
   const part = Math.floor(nmId / 1000);
 
   const generator = new GenerateImgUrl(nmId, "big", 1, "webp");
-  const basketFromAlgo = generator.id(vol);
+  const primaryBasket = generator.id(vol);
 
-  const domains = ['wbbasket.ru', 'geobasket.ru'];
-  const variants = [
-    { size: "big", number: 1, format: "webp" },
-    { size: "big", number: 1, format: "jpg" },
-    { size: "hq", number: 1, format: "webp" },
-    { size: "hq", number: 1, format: "jpg" },
-    { size: "c516x688", number: 1, format: "webp" },
-    { size: "c516x688", number: 1, format: "jpg" },
-    { size: "big", number: 0, format: "jpg" },
-    { size: "big", number: 2, format: "jpg" },
-  ];
+  const getHost = (basket, type) => {
+    if (type === 'wb') return `https://basket-${basket}.wbbasket.ru`;
+    if (type === 'ekt') return `https://ekt-basket-cdn-${basket}.geobasket.ru`;
+    if (type === 'geo') return `https://basket-${basket}.geobasket.ru`;
+  };
 
-  for (const domain of domains) {
-    for (const v of variants) {
-      let directUrl;
-      if (domain === 'geobasket.ru') {
-        directUrl = `https://ekt-basket-cdn-${basketFromAlgo}.${domain}/vol${vol}/part${part}/${nmId}/images/${v.size}/${v.number}.${v.format}`;
-      } else {
-        directUrl = `https://basket-${basketFromAlgo}.${domain}/vol${vol}/part${part}/${nmId}/images/${v.size}/${v.number}.${v.format}`;
-      }
-      const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}`;
-      const ok = await checkImageUrl(proxyUrl, 2000);
-      if (ok) {
-        console.log(`Найдена картинка (алгоритм): ${domain}, корзина ${basketFromAlgo}, ${v.size}/${v.number}.${v.format}`);
-        imageCache[cacheKey] = proxyUrl;
-        localStorage.setItem(cacheKey, JSON.stringify({ url: proxyUrl, timestamp: Date.now() }));
-        return proxyUrl;
+  const hostTypes = ['wb', 'ekt', 'geo'];
+  const primaryUrls = [];
+
+  for (const type of hostTypes) {
+    primaryUrls.push(`${getHost(primaryBasket, type)}/vol${vol}/part${part}/${nmId}/images/big/1.webp`);
+    primaryUrls.push(`${getHost(primaryBasket, type)}/vol${vol}/part${part}/${nmId}/images/big/1.jpg`);
+  }
+
+  try {
+    const url = await Promise.any(primaryUrls.map(u => checkDirectImageUrl(u, 1000)));
+    imageCache[cacheKey] = url;
+    return url;
+  } catch (e) {
+    
+  }
+
+  const allBaskets = Array.from({ length: 40 }, (_, i) => String(i + 1).padStart(2, '0'));
+  
+  const fallbackUrlsWebp = [];
+  const fallbackUrlsJpg = [];
+  
+  for (const basket of allBaskets) {
+    if (basket !== primaryBasket) {
+      for (const type of hostTypes) {
+        fallbackUrlsWebp.push(`${getHost(basket, type)}/vol${vol}/part${part}/${nmId}/images/big/1.webp`);
+        fallbackUrlsJpg.push(`${getHost(basket, type)}/vol${vol}/part${part}/${nmId}/images/big/1.jpg`);
       }
     }
   }
 
-  const popularBaskets = ['31', '33', '08', '15', '10', '11', '12', '13', '01', '02', '03', '22'];
-  for (const basket of popularBaskets) {
-    for (const domain of domains) {
-      for (const v of variants) {
-        let directUrl;
-        if (domain === 'geobasket.ru') {
-          directUrl = `https://ekt-basket-cdn-${basket}.${domain}/vol${vol}/part${part}/${nmId}/images/${v.size}/${v.number}.${v.format}`;
-        } else {
-          directUrl = `https://basket-${basket}.${domain}/vol${vol}/part${part}/${nmId}/images/${v.size}/${v.number}.${v.format}`;
-        }
-        const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}`;
-        const ok = await checkImageUrl(proxyUrl, 2000);
-        if (ok) {
-          console.log(`Найдена картинка (перебор): ${domain}, корзина ${basket}, ${v.size}/${v.number}.${v.format}`);
-          imageCache[cacheKey] = proxyUrl;
-          localStorage.setItem(cacheKey, JSON.stringify({ url: proxyUrl, timestamp: Date.now() }));
-          return proxyUrl;
-        }
-      }
+  try {
+    const url = await Promise.any(fallbackUrlsWebp.map(u => checkDirectImageUrl(u, 2500)));
+    imageCache[cacheKey] = url;
+    return url;
+  } catch (e) {
+    try {
+      const url = await Promise.any(fallbackUrlsJpg.map(u => checkDirectImageUrl(u, 2500)));
+      imageCache[cacheKey] = url;
+      return url;
+    } catch (finalError) {
+      imageCache[cacheKey] = null;
+      return null;
     }
   }
-
-  console.log('Не удалось найти картинку для артикула', article);
-  imageCache[cacheKey] = null;
-  return null;
 };
 
-// Расширенная функция для извлечения артикула из любого текста, содержащего ссылку Wildberries
 const parseWildberriesLink = (input) => {
-  // Убираем лишние пробелы и переносы строк
   const trimmed = input.trim();
-  
-  // Ищем URL, начинающийся с wildberries.ru или wb.ru, возможно с http:// или без
   const urlMatch = trimmed.match(/(https?:\/\/)?(www\.)?(wildberries\.ru|wb\.ru)\/catalog\/\d+[^\s]*/i);
   if (!urlMatch) return null;
   
   const url = urlMatch[0];
-  
-  // Из найденного URL извлекаем артикул (число после /catalog/)
   const articleMatch = url.match(/\/catalog\/(\d+)/);
   if (articleMatch) {
     return articleMatch[1];
   }
-  
   return null;
 };
 
-const openLink = async (url) => {
-  try {
-    await bridge.send('VKWebAppOpenExternalUrl', { url });
-  } catch {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-};
-
-// ---------- Основной компонент ----------
+// Основа
 const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
   const [link, setLink] = useState('');
   const [loading, setLoading] = useState(false);
@@ -214,7 +178,7 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
       return;
     }
 
-    if (article.length < 7) {
+    if (article.length < 5) {
       setNotFoundError(true);
       setLoading(false);
       return;
@@ -234,9 +198,11 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
       return;
     }
 
+    const cleanUrl = `https://www.wildberries.ru/catalog/${article}/detail.aspx`;
+
     const newWish = {
       id: Date.now(),
-      link: link,
+      link: cleanUrl,
       image: imageUrl,
       article: article
     };
@@ -257,17 +223,6 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
     setError('');
   };
 
-  const goToForm = () => {
-    resetNotFound();
-    setShowForm(true);
-  };
-
-  const goToMain = () => {
-    resetNotFound();
-    setShowForm(false);
-  };
-
-  // Контент без View и Panel
   if (notFoundError) {
     return (
       <Div style={{ textAlign: 'center', paddingTop: 32 }}>
@@ -281,10 +236,10 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
           Проверьте корректность ссылки и попробуйте снова.
         </Text>
         <Div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-          <Button size="l" mode="primary" onClick={goToForm}>
+          <Button size="l" mode="primary" onClick={() => { resetNotFound(); setShowForm(true); }}>
             Добавить желание
           </Button>
-          <Button size="l" mode="secondary" onClick={goToMain}>
+          <Button size="l" mode="secondary" onClick={() => { resetNotFound(); setShowForm(false); }}>
             Вернуться на главную
           </Button>
         </Div>
@@ -318,10 +273,18 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
           <Card
             key={wish.id}
             mode="shadow"
-            onClick={() => openLink(wish.link)}
-            style={{ cursor: 'pointer', aspectRatio: '3/4', borderRadius: 12 }}
+            style={{ 
+              aspectRatio: '3/4', 
+              borderRadius: 12, 
+              overflow: 'hidden' 
+            }}
           >
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <Tappable
+              href={wish.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ position: 'relative', width: '100%', height: '100%', display: 'block' }}
+            >
               <img
                 src={wish.image}
                 alt=""
@@ -329,7 +292,7 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
-                  borderRadius: 12,
+                  display: 'block'
                 }}
                 onError={(e) => {
                   e.target.onerror = null;
@@ -337,22 +300,28 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
                 }}
               />
               <IconButton
-                style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)' }}
+                style={{ 
+                  position: 'absolute', 
+                  top: 4, 
+                  right: 4, 
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  zIndex: 2 
+                }}
                 onClick={(e) => { 
+                  e.preventDefault();
                   e.stopPropagation(); 
                   deleteWish(wish.id); 
                 }}
               >
                 <Icon28DeleteOutline fill="#fff" />
               </IconButton>
-            </div>
+            </Tappable>
           </Card>
         ))}
       </CardGrid>
     );
   }
 
-  // Форма добавления
   return (
     <Div>
       <FormItem top="Ссылка на товар Wildberries">
@@ -366,7 +335,7 @@ const WishlistGallery = ({ wishes, setWishes, showForm, setShowForm }) => {
       {loading && (
         <Div style={{ margin: 20, textAlign: 'center' }}>
           <Spinner size="l" />
-          <Div style={{ marginTop: 8 }}>Добавляем в вишлист</Div>
+          <Div style={{ marginTop: 8 }}>Добавляем в вишлист...</Div>
         </Div>
       )}
 

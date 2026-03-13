@@ -1,7 +1,7 @@
 {
   "static_path": "build",
-  "app_id": "54477328",
-  "secret_key": "a18e0cdfa18e0cdfa18e0cdf43a2b14ecfaa18ea18e0cdfc83e249a0f0479dc217fbba9",
+  "app_id": "54482639",
+  "secret_key": "118df09f118df09f118df09f5812b2a6501118d118df09f7839bcb7882a5761ad39a3f7",
   "endpoints": {
     "mobile": "index.html",
     "mvk": "index.html",
