@@ -2,13 +2,14 @@ import vkBridge, { parseURLSearchParamsForGetLaunchParams } from '@vkontakte/vk-
 import { useAdaptivity, useAppearance, useInsets } from '@vkontakte/vk-bridge-react';
 import { AdaptivityProvider, ConfigProvider, AppRoot } from '@vkontakte/vkui';
 import '@vkontakte/vkui/dist/vkui.css';
+
 import { transformVKBridgeAdaptivity } from './utils';
 import App from './App';
 
 export const AppConfig = () => {
   const vkBridgeAppearance = useAppearance() || undefined;
-  const vkBridgeInsets = useInsets() || undefined;
   const adaptivity = transformVKBridgeAdaptivity(useAdaptivity());
+  const insets = useInsets();
   const { vk_platform } = parseURLSearchParamsForGetLaunchParams(window.location.search);
 
   return (
@@ -19,7 +20,8 @@ export const AppConfig = () => {
       hasCustomPanelHeaderAfter={true}
     >
       <AdaptivityProvider {...adaptivity}>
-        <AppRoot mode="full" safeAreaInsets={vkBridgeInsets}>
+        {/* Передаём safeAreaInsets в AppRoot */}
+        <AppRoot mode="full" safeAreaInsets={insets}>
           <App />
         </AppRoot>
       </AdaptivityProvider>
